@@ -1,12 +1,12 @@
-import { Client } from '@stomp/stompjs';
-import type { IMessage } from '@stomp/stompjs';
+import type {IMessage} from '@stomp/stompjs';
+import {Client} from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
-import type { ChatMessage, ChatMessageRequest } from '../types/chat';
+import type {ChatMessage, ChatMessageRequest} from '../types/chat';
 
 const BACKEND_URL = 'http://localhost:8080';
 
 export class ChatService {
-  private client: Client | null = null;
+  private readonly client: Client | null = null;
   private subscriptions: Map<string, any> = new Map();
 
   constructor() {
@@ -118,8 +118,7 @@ export class ChatService {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      const messages: ChatMessage[] = await response.json();
-      return messages;
+        return await response.json();
     } catch (error) {
       console.error('Error fetching chat history:', error);
       return [];
