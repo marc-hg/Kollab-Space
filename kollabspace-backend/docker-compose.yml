@@ -1,0 +1,114 @@
+version: '3.8'
+
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: kollabspace-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kollabspace}
+      POSTGRES_USER: ${POSTGRES_USER:-kollabspace_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kollabspace_dev_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kollabspace_user} -d ${POSTGRES_DB:-kollabspace}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kollabspace-network
+
+  # Redis for Phase 8 (Message Broker)
+  redis:
+    image: redis:7-alpine
+    container_name: kollabspace-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-kollabspace_redis_password}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kollabspace-network
+
+  # Spring Boot Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kollabspace-backend
+    restart: unless-stopped
+    environment:
+      # Database Configuration
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-kollabspace}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-kollabspace_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-kollabspace_dev_password}
+
+      # Redis Configuration (for Phase 8)
+      # SPRING_REDIS_HOST: redis
+      # SPRING_REDIS_PORT: 6379
+      # SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-kollabspace_redis_password}
+
+      # WebSocket CORS (update with your domain)
+      WEBSOCKET_ALLOWED_ORIGINS: ${WEBSOCKET_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
+
+      # Server Configuration
+      SERVER_PORT: 8080
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - kollabspace-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # pgAdmin (Optional - Database UI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: kollabspace-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@kollabspace.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - kollabspace-network
+    profiles:
+      - tools  # Only start with: docker-compose --profile tools up
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  kollabspace-network:
+    driver: bridge

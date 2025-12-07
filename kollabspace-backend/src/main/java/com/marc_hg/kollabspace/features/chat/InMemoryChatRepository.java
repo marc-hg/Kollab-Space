@@ -8,16 +8,15 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-@Repository
+@Repository("inMemoryChatRepository")
 @Slf4j
-@Primary
 public class InMemoryChatRepository implements ChatRepository {
     private static final int MAX_MESSAGES_PER_ROOM = 100;
 
     private final ConcurrentHashMap<String, List<ChatMessage>> messages = new ConcurrentHashMap<>();
 
     @Override
-    public void save(ChatMessage message) {
+    public ChatMessage save(ChatMessage message) {
         log.info("Saving message {}", message);
         List<ChatMessage> roomMessages = findByRoomId(message.getRoomId());
         roomMessages.add(message);
@@ -28,6 +27,7 @@ public class InMemoryChatRepository implements ChatRepository {
             log.info("Removed oldest message from room {} (limit: {})",
                     message.getRoomId(), MAX_MESSAGES_PER_ROOM);
         }
+        return message;
     }
 
     @Override

@@ -199,3 +199,11 @@ README.html
 *.iml
 .idea
 .exercism
+
+### Environment Variables ###
+.env
+
+### Database ###
+*.db
+*.sqlite
+*.sqlite3

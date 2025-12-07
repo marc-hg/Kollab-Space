@@ -3,17 +3,20 @@ package com.marc_hg.kollabspace.features.document;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 @Service
 @Slf4j
 public class DocumentService {
-    private final ConcurrentHashMap<String, Document> documents = new ConcurrentHashMap<>();
+    private final DocumentRepository documentRepository;
+
+    public DocumentService(DocumentRepository documentRepository) {
+        this.documentRepository = documentRepository;
+    }
 
     public Document getDocument(String id) {
-        return documents.computeIfAbsent(id, Key -> {
-            log.info("Creating new document with id {}", Key);
-            return new Document(Key, "");
+        return documentRepository.findById(id).orElseGet(() -> {
+            log.info("Creating new document with id {}", id);
+            Document newDocument = new Document(id, "");
+            return documentRepository.save(newDocument);
         });
     }
 
@@ -21,6 +24,6 @@ public class DocumentService {
         Document document = getDocument(id);
         document.setContent(content);
         log.info("Updated document with id {}", id);
-        return document;
+        return documentRepository.save(document);
     }
 }
