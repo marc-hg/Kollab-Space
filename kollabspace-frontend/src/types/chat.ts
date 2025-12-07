@@ -17,4 +17,4 @@ export interface ChatRoom {
   unreadCount?: number;
 }
 
-export type AppType = 'chat' | 'docs';
+export type AppType = 'chat' | 'drawing' | 'docs';

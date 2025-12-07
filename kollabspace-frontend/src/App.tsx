@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Chat from './components/Chat';
+import { Drawing } from './components/Drawing';
 import { chatService } from './services/chatService';
+import { drawingService } from './services/drawingService';
 import type { AppType, ChatRoom, ChatMessage } from './types/chat';
+import type { Canvas, DrawingStroke, Point } from './types/drawing';
 import './App.css';
 
 function App() {
@@ -13,6 +16,12 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [userName, setUserName] = useState('');
   const [showUserNameDialog, setShowUserNameDialog] = useState(true);
+
+  // Drawing state
+  const [canvases, setCanvases] = useState<Canvas[]>([]);
+  const [currentCanvas, setCurrentCanvas] = useState<string | null>(null);
+  const [strokes, setStrokes] = useState<DrawingStroke[]>([]);
+  const [isDrawingConnected, setIsDrawingConnected] = useState(false);
 
   useEffect(() => {
     // Connect to WebSocket
@@ -58,6 +67,60 @@ function App() {
     }
   }, [currentRoom, isConnected]);
 
+  // Connect to Drawing WebSocket
+  useEffect(() => {
+    const connect = async () => {
+      try {
+        await drawingService.connect(
+          () => {
+            setIsDrawingConnected(true);
+            console.log('Drawing WebSocket connected');
+          },
+          (error) => {
+            setIsDrawingConnected(false);
+            console.error('Drawing WebSocket error:', error);
+          }
+        );
+      } catch (error) {
+        console.error('Failed to connect to drawing:', error);
+      }
+    };
+
+    connect();
+
+    return () => {
+      drawingService.disconnect();
+    };
+  }, []);
+
+  // Subscribe to canvas when it changes
+  useEffect(() => {
+    if (currentCanvas && isDrawingConnected) {
+      // Fetch canvas history
+      drawingService.fetchCanvasHistory(currentCanvas).then((history) => {
+        setStrokes(history);
+      });
+
+      // Subscribe to canvas
+      drawingService.subscribeToCanvas(
+        currentCanvas,
+        (stroke) => {
+          setStrokes((prev) => [...prev, stroke]);
+        },
+        (deleteMessage) => {
+          setStrokes((prev) => prev.filter((s) => s.id !== deleteMessage.strokeId));
+        },
+        () => {
+          setStrokes([]);
+        }
+      );
+
+      return () => {
+        drawingService.unsubscribeFromCanvas(currentCanvas);
+      };
+    }
+  }, [currentCanvas, isDrawingConnected]);
+
   const handleJoinRoom = (roomId: string) => {
     // Check if room already exists
     const existingRoom = rooms.find((r) => r.id === roomId);
@@ -89,6 +152,48 @@ function App() {
     if (name.trim()) {
       setUserName(name.trim());
       setShowUserNameDialog(false);
+    }
+  };
+
+  // Drawing handlers
+  const handleJoinCanvas = (canvasId: string) => {
+    const existingCanvas = canvases.find((c) => c.id === canvasId);
+    if (!existingCanvas) {
+      const newCanvas: Canvas = {
+        id: canvasId,
+        name: canvasId,
+      };
+      setCanvases((prev) => [...prev, newCanvas]);
+    }
+    setCurrentCanvas(canvasId);
+  };
+
+  const handleCanvasChange = (canvasId: string) => {
+    setCurrentCanvas(canvasId);
+    setStrokes([]);
+  };
+
+  const handleSendStroke = (points: Point[], color: string, width: number) => {
+    if (currentCanvas && userName) {
+      drawingService.sendStroke(currentCanvas, {
+        canvasId: currentCanvas,
+        points,
+        color,
+        width,
+        userId: userName,
+      });
+    }
+  };
+
+  const handleDeleteStroke = (strokeId: string) => {
+    if (currentCanvas) {
+      drawingService.deleteStroke(currentCanvas, strokeId);
+    }
+  };
+
+  const handleClearCanvas = () => {
+    if (currentCanvas) {
+      drawingService.clearCanvas(currentCanvas);
     }
   };
 
@@ -129,6 +234,10 @@ function App() {
           currentRoom={currentRoom}
           onRoomChange={handleRoomChange}
           onJoinRoom={handleJoinRoom}
+          canvases={canvases}
+          currentCanvas={currentCanvas}
+          onCanvasChange={handleCanvasChange}
+          onJoinCanvas={handleJoinCanvas}
         />
 
         <div className="app-content">
@@ -145,6 +254,16 @@ function App() {
               <h2>Welcome to KollabSpace Chat</h2>
               <p>Select a room or join a new one to start chatting</p>
             </div>
+          ) : currentApp === 'drawing' ? (
+            <Drawing
+              canvas={canvases.find((c) => c.id === currentCanvas) || null}
+              strokes={strokes}
+              userName={userName}
+              isConnected={isDrawingConnected}
+              onSendStroke={handleSendStroke}
+              onDeleteStroke={handleDeleteStroke}
+              onClearCanvas={handleClearCanvas}
+            />
           ) : (
             <div className="empty-view">
               <h2>Docs</h2>

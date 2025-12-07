@@ -3,7 +3,7 @@ import {Client} from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import type {ChatMessage, ChatMessageRequest} from '../types/chat';
 
-const BACKEND_URL = 'http://localhost:8080';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
 
 export class ChatService {
   private readonly client: Client | null = null;
